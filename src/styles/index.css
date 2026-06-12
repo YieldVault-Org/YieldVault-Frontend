@@ -20,6 +20,16 @@
   --max-width: 1080px;
 }
 
+/* Light theme overrides, opt in via [data-theme="light"] on <html>. */
+:root[data-theme='light'] {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-2: #eef0f6;
+  --border: #d8dce6;
+  --text: #1b1e27;
+  --muted: #5d6477;
+}
+
 * {
   box-sizing: border-box;
 }
