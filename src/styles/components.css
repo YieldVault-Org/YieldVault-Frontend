@@ -390,6 +390,47 @@
   margin-top: 1rem;
 }
 
+/* Alerts */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  margin: 1rem 0;
+}
+
+.alert-title {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.alert-text {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.alert-info {
+  background: rgba(108, 92, 231, 0.1);
+  border-color: rgba(108, 92, 231, 0.4);
+}
+
+.alert-success {
+  background: rgba(46, 204, 113, 0.1);
+  border-color: rgba(46, 204, 113, 0.4);
+}
+
+.alert-warning {
+  background: rgba(241, 196, 15, 0.1);
+  border-color: rgba(241, 196, 15, 0.4);
+}
+
+.alert-error {
+  background: rgba(231, 76, 60, 0.1);
+  border-color: rgba(231, 76, 60, 0.4);
+}
+
 /* Copy button */
 .copy-button {
   background: var(--surface-2);
