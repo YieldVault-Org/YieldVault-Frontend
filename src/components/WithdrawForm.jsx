@@ -1,0 +1,97 @@
+import { useState } from 'react';
+import Button from './Button.jsx';
+import { useWallet } from '../hooks/useWallet.js';
+import { usePositions } from '../hooks/usePositions.js';
+import { validateWithdraw } from '../utils/validate.js';
+import { previewWithdraw } from '../utils/shares.js';
+import { formatAmount } from '../utils/format.js';
+import * as vaultService from '../services/vault.js';
+import * as walletService from '../services/wallet.js';
+
+/**
+ * Withdraw form for a vault. Validates against the user's deposited amount,
+ * previews the shares to be burned, and submits a mock transaction.
+ * @param {object} props
+ * @param {object} props.vault
+ * @param {() => void} [props.onSuccess]
+ */
+export default function WithdrawForm({ vault, onSuccess }) {
+  const { isConnected } = useWallet();
+  const { positions } = usePositions();
+  const [amount, setAmount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const position = positions.find((p) => p.vaultId === vault.id);
+  const deposited = position?.value ?? 0;
+  const { valid, error } = validateWithdraw(amount, deposited);
+  const sharesBurned = previewWithdraw(
+    amount,
+    vault.totalAssets,
+    vault.totalShares,
+  );
+  const touched = amount !== '';
+
+  const handleMax = () => setAmount(String(deposited));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!valid) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      await vaultService.withdraw(vault.id, Number(amount));
+      await walletService.signAndSubmit(`Withdraw ${amount} ${vault.asset}`);
+      setMessage(`Withdrew ${amount} ${vault.asset}`);
+      setAmount('');
+      onSuccess?.();
+    } catch (err) {
+      setMessage(err.message || 'Withdraw failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="vault-form" onSubmit={handleSubmit}>
+      <div className="form-row">
+        <label htmlFor="withdraw-amount">Amount</label>
+        <span className="muted">
+          Position: {formatAmount(deposited)} {vault.asset}
+        </span>
+      </div>
+      <div className="input-group">
+        <input
+          id="withdraw-amount"
+          type="number"
+          min="0"
+          step="any"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={!isConnected || submitting}
+        />
+        <button type="button" className="max-btn" onClick={handleMax}>
+          MAX
+        </button>
+      </div>
+
+      <div className="preview-row">
+        <span className="muted">Shares burned</span>
+        <span>{formatAmount(sharesBurned)} shares</span>
+      </div>
+
+      {touched && error && <p className="field-error">{error}</p>}
+      {message && <p className="form-message">{message}</p>}
+
+      <Button
+        type="submit"
+        variant="secondary"
+        loading={submitting}
+        disabled={!isConnected || !valid}
+      >
+        {isConnected ? 'Withdraw' : 'Connect wallet to withdraw'}
+      </Button>
+    </form>
+  );
+}
