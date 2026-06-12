@@ -42,6 +42,17 @@ src/
 - Mock Stellar wallet (connect/disconnect, balances, signing)
 - Loading, error and empty states throughout
 
+## Utilities & hooks
+
+Reusable building blocks live under `src/utils` and `src/hooks`:
+
+- `utils/format.js` — currency, percent, share and address formatting
+- `utils/positions.js` — portfolio aggregation (`summarizePositions`)
+- `utils/shares.js` — vault share-price and deposit/withdraw math
+- `hooks/useMediaQuery` — subscribe to a CSS media query
+- `hooks/useClipboard` — copy text with transient "copied" feedback
+- `hooks/useDocumentTitle` — set the browser tab title per page
+
 ## Scripts
 
 | Command           | Description              |
