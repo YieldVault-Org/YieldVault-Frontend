@@ -1,0 +1,61 @@
+import { useVaults } from '../hooks/useVaults.js';
+import { usePositions } from '../hooks/usePositions.js';
+import { useWallet } from '../hooks/useWallet.js';
+import StatCard from '../components/StatCard.jsx';
+import VaultCard from '../components/VaultCard.jsx';
+import Loader from '../components/Loader.jsx';
+import ErrorMessage from '../components/ErrorMessage.jsx';
+import { formatUsd, formatPercent, formatAmount } from '../utils/format.js';
+
+/**
+ * Dashboard: protocol stats (TVL/APY), the user's aggregate position and
+ * the list of available vaults.
+ */
+export default function Dashboard() {
+  const { vaults, stats, loading, error, reload } = useVaults();
+  const { positions } = usePositions();
+  const { isConnected } = useWallet();
+
+  const totalValue = positions.reduce((sum, p) => sum + p.value, 0);
+  const totalShares = positions.reduce((sum, p) => sum + p.shares, 0);
+
+  if (loading) return <Loader label="Loading vaults…" />;
+  if (error) return <ErrorMessage message={error} onRetry={reload} />;
+
+  return (
+    <div className="dashboard">
+      <h1 className="page-title">Dashboard</h1>
+
+      <div className="stat-grid">
+        <StatCard
+          label="Total Value Locked"
+          value={formatUsd(stats?.totalTvl ?? 0)}
+          icon="🏦"
+        />
+        <StatCard
+          label="Average APY"
+          value={formatPercent(stats?.avgApy ?? 0)}
+          icon="📈"
+        />
+        <StatCard
+          label="Your Position"
+          value={isConnected ? formatUsd(totalValue) : '—'}
+          hint={isConnected ? undefined : 'Connect wallet to view'}
+          icon="💼"
+        />
+        <StatCard
+          label="Your Total Shares"
+          value={isConnected ? formatAmount(totalShares, 2) : '—'}
+          icon="🧾"
+        />
+      </div>
+
+      <h2 className="section-title">Vaults</h2>
+      <div className="vault-grid">
+        {vaults.map((vault) => (
+          <VaultCard key={vault.id} vault={vault} />
+        ))}
+      </div>
+    </div>
+  );
+}
