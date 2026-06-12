@@ -1,0 +1,85 @@
+import { useState } from 'react';
+import Button from './Button.jsx';
+import { useWallet } from '../hooks/useWallet.js';
+import { validateDeposit } from '../utils/validate.js';
+import { previewDeposit } from '../utils/shares.js';
+import { formatAmount } from '../utils/format.js';
+import * as vaultService from '../services/vault.js';
+import * as walletService from '../services/wallet.js';
+
+/**
+ * Deposit form for a vault. Validates against wallet balance, previews the
+ * shares to be minted, and submits a mock transaction.
+ * @param {object} props
+ * @param {object} props.vault
+ * @param {() => void} [props.onSuccess]
+ */
+export default function DepositForm({ vault, onSuccess }) {
+  const { isConnected, balanceOf } = useWallet();
+  const [amount, setAmount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const balance = balanceOf(vault.asset);
+  const { valid, error } = validateDeposit(amount, balance);
+  const sharesOut = previewDeposit(amount, vault.totalAssets, vault.totalShares);
+  const touched = amount !== '';
+
+  const handleMax = () => setAmount(String(balance));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!valid) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      await vaultService.deposit(vault.id, Number(amount));
+      await walletService.signAndSubmit(`Deposit ${amount} ${vault.asset}`);
+      setMessage(`Deposited ${amount} ${vault.asset}`);
+      setAmount('');
+      onSuccess?.();
+    } catch (err) {
+      setMessage(err.message || 'Deposit failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="vault-form" onSubmit={handleSubmit}>
+      <div className="form-row">
+        <label htmlFor="deposit-amount">Amount</label>
+        <span className="muted">
+          Balance: {formatAmount(balance)} {vault.asset}
+        </span>
+      </div>
+      <div className="input-group">
+        <input
+          id="deposit-amount"
+          type="number"
+          min="0"
+          step="any"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={!isConnected || submitting}
+        />
+        <button type="button" className="max-btn" onClick={handleMax}>
+          MAX
+        </button>
+      </div>
+
+      <div className="preview-row">
+        <span className="muted">You receive</span>
+        <span>{formatAmount(sharesOut)} shares</span>
+      </div>
+
+      {touched && error && <p className="field-error">{error}</p>}
+      {message && <p className="form-message">{message}</p>}
+
+      <Button type="submit" loading={submitting} disabled={!isConnected || !valid}>
+        {isConnected ? 'Deposit' : 'Connect wallet to deposit'}
+      </Button>
+    </form>
+  );
+}
