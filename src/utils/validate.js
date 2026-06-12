@@ -58,3 +58,24 @@ export function isPositiveNumber(value) {
   const num = Number(value);
   return Number.isFinite(num) && num > 0;
 }
+
+/**
+ * Loose check for a Stellar public key: a 56-character base32 string that
+ * starts with 'G'. Intended for UI feedback, not on-chain validation.
+ * @param {string} address
+ * @returns {boolean}
+ */
+export function isStellarAddress(address) {
+  if (typeof address !== 'string') return false;
+  return /^G[A-Z2-7]{55}$/.test(address.trim());
+}
+
+/**
+ * True when a value is a number within the inclusive [0, 100] percent range.
+ * @param {string|number} value
+ * @returns {boolean}
+ */
+export function isValidPercent(value) {
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 && num <= 100;
+}
