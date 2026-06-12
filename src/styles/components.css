@@ -390,6 +390,42 @@
   margin-top: 1rem;
 }
 
+/* Tags */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tag-default {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.tag-success {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--gain);
+}
+
+.tag-warning {
+  background: rgba(241, 196, 15, 0.15);
+  color: #f1c40f;
+}
+
+.tag-danger {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--loss);
+}
+
+.tag-accent {
+  background: rgba(0, 209, 178, 0.15);
+  color: var(--accent);
+}
+
 /* Wallet */
 .wallet-button {
   display: flex;
