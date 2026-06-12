@@ -1,6 +1,7 @@
 import { useVaults } from '../hooks/useVaults.js';
 import { usePositions } from '../hooks/usePositions.js';
 import { useWallet } from '../hooks/useWallet.js';
+import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import StatCard from '../components/StatCard.jsx';
 import VaultCard from '../components/VaultCard.jsx';
 import Loader from '../components/Loader.jsx';
@@ -12,6 +13,7 @@ import { formatUsd, formatPercent, formatAmount } from '../utils/format.js';
  * the list of available vaults.
  */
 export default function Dashboard() {
+  useDocumentTitle('Dashboard');
   const { vaults, stats, loading, error, reload } = useVaults();
   const { positions } = usePositions();
   const { isConnected } = useWallet();
