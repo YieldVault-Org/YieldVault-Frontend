@@ -1,6 +1,7 @@
 /* Theme tokens and global base styles for YieldVault. */
 @import './layout.css';
 @import './components.css';
+@import './home.css';
 
 :root {
   --bg: #0f1117;
