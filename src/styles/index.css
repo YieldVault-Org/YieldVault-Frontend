@@ -1,0 +1,61 @@
+/* Theme tokens and global base styles for YieldVault. */
+:root {
+  --bg: #0f1117;
+  --surface: #181b24;
+  --surface-2: #20242f;
+  --border: #2a2f3c;
+  --text: #e7e9ee;
+  --muted: #8b90a0;
+  --primary: #6c5ce7;
+  --primary-hover: #5a4bd1;
+  --accent: #00d1b2;
+  --gain: #2ecc71;
+  --loss: #e74c3c;
+  --radius: 12px;
+  --max-width: 1080px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.gain {
+  color: var(--gain);
+}
+
+.loss {
+  color: var(--loss);
+}
