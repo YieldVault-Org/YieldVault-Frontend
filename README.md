@@ -60,3 +60,4 @@ Reusable building blocks live under `src/utils` and `src/hooks`:
 | `npm run dev`     | Start the dev server     |
 | `npm run build`   | Build for production     |
 | `npm run preview` | Preview the build        |
+| `npm run test`    | Run Vitest tests         |

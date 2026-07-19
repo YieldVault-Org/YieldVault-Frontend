@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useVault } from '../hooks/useVault.js';
-import StatCard from '../components/StatCard.jsx';
-import Tabs from '../components/Tabs.jsx';
-import DepositForm from '../components/DepositForm.jsx';
-import WithdrawForm from '../components/WithdrawForm.jsx';
-import Loader from '../components/Loader.jsx';
-import ErrorMessage from '../components/ErrorMessage.jsx';
+import StatCard from '../components/StatCard';
+import Tabs from '../components/Tabs';
+import DepositForm from '../components/DepositForm';
+import WithdrawForm from '../components/WithdrawForm';
+import Loader from '../components/Loader';
+import ErrorMessage from '../components/ErrorMessage';
 import { formatUsd, formatPercent, formatAmount } from '../utils/format.js';
 import { sharePrice } from '../utils/shares.js';
 import { getAssetByCode } from '../constants/assets.js';
