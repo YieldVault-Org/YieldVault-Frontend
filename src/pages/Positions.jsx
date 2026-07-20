@@ -11,6 +11,7 @@ import WalletButton from '../components/WalletButton';
 import ResizableTable from '../components/ResizableTable';
 import { formatUsd, formatAmount } from '../utils/format.js';
 import { summarizePositions } from '../utils/positions.js';
+import PullToRefreshWrapper from '../components/PullToRefresh.jsx';
 
 /**
  * Positions page: the user's open vault positions and total earned yield.
