@@ -8,6 +8,7 @@ import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import LastUpdated from '../components/LastUpdated';
 import { formatUsd, formatPercent, formatAmount } from '../utils/format.js';
+import PullToRefreshWrapper from '../components/PullToRefresh.jsx';
 import { summarizePositions } from '../utils/positions.js';
 
 /**
@@ -55,11 +56,13 @@ export default function Dashboard() {
       </div>
 
       <h2 className="section-title">Vaults</h2>
-      <div className="vault-grid">
-        {vaults.map((vault) => (
-          <VaultCard key={vault.id} vault={vault} />
-        ))}
-      </div>
+      <PullToRefreshWrapper onRefresh={reload}>
+        <div className="vault-grid">
+          {vaults.map((vault) => (
+            <VaultCard key={vault.id} vault={vault} />
+          ))}
+        </div>
+      </PullToRefreshWrapper>
     </div>
   );
 }
