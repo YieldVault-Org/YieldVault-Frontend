@@ -43,6 +43,7 @@ src/
 - Positions list with per-vault value and earned yield
 - Mock Stellar wallet (connect/disconnect, balances, signing)
 - Loading, error and empty states throughout
+- **Collapsible navigation** — navigation links can be collapsed/expanded on mobile, with state persisted to localStorage
 - **Browser font scaling** — all font sizes use `rem` units and layout
   constraints scale proportionally, so the UI respects the user's browser
   default font size setting
