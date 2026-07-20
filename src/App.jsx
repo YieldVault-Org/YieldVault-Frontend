@@ -1,9 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
-import { DEFAULT_LANG } from './constants/i18n';
-import useDocumentLang from './hooks/useDocumentLang';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
+import IdleGuard from './components/IdleGuard';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import VaultDetail from './pages/VaultDetail';
@@ -14,11 +13,9 @@ import NotFound from './pages/NotFound';
  * Root layout: persistent navbar/footer with routed page content.
  */
 export default function App() {
-  useDocumentLang(DEFAULT_LANG);
   return (
-    // Explicit lang keeps the app subtree correctly tagged even when it is
-    // mounted inside a host page that declares a different language.
-    <div className="app" lang={DEFAULT_LANG}>
+    <div className="app">
+      <IdleGuard />
       <Navbar />
       <main className="app-main">
         <ErrorBoundary>
