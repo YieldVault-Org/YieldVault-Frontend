@@ -21,6 +21,9 @@ export default function Navbar() {
         <NavLink to="/positions" className={linkClass}>
           Positions
         </NavLink>
+        <NavLink to="/compare" className={linkClass}>
+          Compare
+        </NavLink>
         <NavLink to="/wizard-demo" className={linkClass}>
           Wizard
         </NavLink>

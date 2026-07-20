@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import VaultDetail from './pages/VaultDetail';
 import Positions from './pages/Positions';
+import Compare from './pages/Compare';
 import NotFound from './pages/NotFound';
 
 /**
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vault/:id" element={<VaultDetail />} />
             <Route path="/positions" element={<Positions />} />
+            <Route path="/compare" element={<Compare />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </ErrorBoundary>
