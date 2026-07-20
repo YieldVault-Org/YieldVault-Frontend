@@ -69,9 +69,42 @@
   stroke-width: 1;
 }
 
-.chart-axis-label {
+/* Faint reference lines shown only when the grid toggle is on, so they read
+   as a trace to help pinpoint a value without competing with the data. */
+.chart-gridline {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.5;
+  stroke-dasharray: 2 3;
+}
+
+.chart-tick-label {
   fill: var(--muted);
   font-size: 10px;
+}
+
+.chart-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.chart-grid-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+}
+
+.chart-grid-toggle[aria-pressed='true'] {
+  color: var(--text);
+  border-color: var(--primary);
 }
 
 .chart-line {

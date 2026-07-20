@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useApyHistory } from '../hooks/useApyHistory.js';
+import { useToggle } from '../hooks/useToggle.js';
 import { buildApySeries } from '../utils/chartSeries.js';
 import { formatPercent } from '../utils/format.js';
 import LineChart from './LineChart';
@@ -9,13 +10,14 @@ import ErrorMessage from './ErrorMessage';
 
 /**
  * APY-by-vault trend chart with a legend that toggles individual vaults'
- * series on and off.
+ * series on and off, plus a toggle for faint axis gridlines.
  * @param {object} props
  * @param {Array} props.vaults
  */
 export default function VaultApyChart({ vaults }) {
   const { history, loading, error, reload } = useApyHistory(vaults);
   const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const [showGrid, { toggle: toggleGrid }] = useToggle(false);
 
   const series = useMemo(() => buildApySeries(vaults, history), [vaults, history]);
 
@@ -33,7 +35,22 @@ export default function VaultApyChart({ vaults }) {
 
   return (
     <div className="chart-card">
-      <LineChart series={series} hiddenIds={hiddenIds} formatY={formatPercent} />
+      <div className="chart-toolbar">
+        <button
+          type="button"
+          className="chart-grid-toggle"
+          aria-pressed={showGrid}
+          onClick={toggleGrid}
+        >
+          Gridlines {showGrid ? 'on' : 'off'}
+        </button>
+      </div>
+      <LineChart
+        series={series}
+        hiddenIds={hiddenIds}
+        formatY={formatPercent}
+        showGrid={showGrid}
+      />
       <ChartLegend series={series} hiddenIds={hiddenIds} onToggle={toggleSeries} />
     </div>
   );

@@ -4,6 +4,8 @@ import {
   visibleSeries,
   seriesDomain,
   projectPoints,
+  axisTicks,
+  xAxisTickIndices,
 } from '../../src/utils/chartSeries.js';
 
 const vaults = [
@@ -100,5 +102,45 @@ describe('projectPoints', () => {
     expect(projected[0]).toEqual({ x: 0, y: 50 });
     // x=10,y=100 (top-right in data space) -> pixel (width, 0)
     expect(projected[1]).toEqual({ x: 200, y: 0 });
+  });
+});
+
+describe('axisTicks', () => {
+  it('splits a range into count evenly-spaced values, inclusive of both ends', () => {
+    expect(axisTicks(0, 30, 4)).toEqual([0, 10, 20, 30]);
+  });
+
+  it('defaults to 4 ticks', () => {
+    expect(axisTicks(0, 9)).toHaveLength(4);
+  });
+
+  it('returns just the min for a count of 1', () => {
+    expect(axisTicks(5, 25, 1)).toEqual([5]);
+  });
+});
+
+describe('xAxisTickIndices', () => {
+  it('spreads indices evenly across the point count, including first and last', () => {
+    const indices = xAxisTickIndices(14, 4);
+    expect(indices[0]).toBe(0);
+    expect(indices[indices.length - 1]).toBe(13);
+    expect(indices.length).toBeLessThanOrEqual(4);
+  });
+
+  it('never returns more indices than there are points', () => {
+    expect(xAxisTickIndices(2, 4)).toEqual([0, 1]);
+  });
+
+  it('returns a single index for a single-point series', () => {
+    expect(xAxisTickIndices(1, 4)).toEqual([0]);
+  });
+
+  it('returns nothing for an empty series', () => {
+    expect(xAxisTickIndices(0, 4)).toEqual([]);
+  });
+
+  it('deduplicates indices that round to the same value', () => {
+    const indices = xAxisTickIndices(3, 10);
+    expect(new Set(indices).size).toBe(indices.length);
   });
 });

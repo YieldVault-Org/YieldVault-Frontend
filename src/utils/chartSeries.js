@@ -91,3 +91,35 @@ export function projectPoints(points, domain, width, height) {
     y: height - ((p.y - minY) / spanY) * height,
   }));
 }
+
+/**
+ * Evenly-spaced tick values across [min, max], inclusive of both ends.
+ * Used for Y-axis gridlines/labels. A single-value range (min === max,
+ * already padded by seriesDomain so this shouldn't normally happen) still
+ * returns `count` copies of that value rather than dividing by zero.
+ * @param {number} min
+ * @param {number} max
+ * @param {number} [count=4]
+ * @returns {number[]}
+ */
+export function axisTicks(min, max, count = 4) {
+  if (count <= 1) return [min];
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, i) => min + step * i);
+}
+
+/**
+ * Pick evenly-spaced point indices to label on the X axis, so a series with
+ * many points doesn't try to cram a label at every single one into a chart
+ * a few hundred pixels wide.
+ * @param {number} pointCount
+ * @param {number} [count=4]
+ * @returns {number[]} indices into a series' points array, deduplicated
+ */
+export function xAxisTickIndices(pointCount, count = 4) {
+  if (pointCount <= 1) return pointCount === 1 ? [0] : [];
+  const n = Math.min(count, pointCount);
+  const step = (pointCount - 1) / (n - 1);
+  const indices = Array.from({ length: n }, (_, i) => Math.round(step * i));
+  return [...new Set(indices)];
+}
