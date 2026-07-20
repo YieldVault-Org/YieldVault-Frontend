@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState';
 import WalletButton from '../components/WalletButton';
 import { formatUsd, formatAmount } from '../utils/format.js';
 import { summarizePositions } from '../utils/positions.js';
+import PullToRefreshWrapper from '../components/PullToRefresh.jsx';
 
 /**
  * Positions page: the user's open vault positions and total earned yield.
@@ -64,11 +65,13 @@ export default function Positions() {
         <StatCard label="Open Positions" value={positions.length} icon="📑" />
       </div>
 
-      <div className="position-list">
-        {positions.map((position) => (
-          <PositionRow key={position.vaultId} position={position} />
-        ))}
-      </div>
+       <PullToRefreshWrapper onRefresh={reload}>
+         <div className="position-list">
+           {positions.map((position) => (
+             <PositionRow key={position.vaultId} position={position} />
+           ))}
+         </div>
+       </PullToRefreshWrapper>
     </div>
   );
 }
