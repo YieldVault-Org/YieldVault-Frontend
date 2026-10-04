@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Button from './Button';
 import AmountInput from './AmountInput';
+import { parseLocaleAmount } from '../utils/localeAmount.js';
 import { useWallet } from '../hooks/useWallet.js';
 import { usePositions } from '../hooks/usePositions.js';
 import { validateWithdraw } from '../utils/validate.js';
@@ -30,7 +31,9 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
   const { isConnected } = useWallet();
   const { positions } = usePositions();
   const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submissionInFlight = useRef(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const position = positions.find((p: { vaultId: string }) => p.vaultId === vault.id);
@@ -42,16 +45,22 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
     vault.totalShares,
   );
   const touched = amount !== '';
+  const validationMessage = amountError || (touched ? error : null);
 
-  const handleMax = () => setAmount(String(deposited));
+  const handleMax = () => {
+    const maximum = parseLocaleAmount(deposited);
+    setAmount(maximum.ok ? maximum.canonical : String(deposited));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
+    if (!isConnected || !valid || amountError || submissionInFlight.current) return;
+    // A ref closes reentrant submits before React commits the loading state.
+    submissionInFlight.current = true;
     setSubmitting(true);
     setMessage(null);
     try {
-      await vaultService.withdraw(vault.id, Number(amount));
+      await vaultService.withdraw(vault.id, amount);
       await walletService.signAndSubmit(`Withdraw ${amount} ${vault.asset}`);
       setMessage(`Withdrew ${amount} ${vault.asset}`);
       setAmount('');
@@ -59,6 +68,7 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
     } catch (err: unknown) {
       setMessage(err instanceof Error ? err.message : 'Withdraw failed');
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -76,6 +86,7 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
           id="withdraw-amount"
           value={amount}
           onChange={setAmount}
+          onValidationError={setAmountError}
           disabled={!isConnected || submitting}
           placeholder="0.00"
           min="0"
@@ -91,14 +102,14 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
         <span>{formatAmount(sharesBurned)} shares</span>
       </div>
 
-      {touched && error && <p className="field-error">{error}</p>}
+      {validationMessage && <p className="field-error">{validationMessage}</p>}
       {message && <p className="form-message">{message}</p>}
 
       <Button
         type="submit"
         variant="secondary"
         loading={submitting}
-        disabled={!isConnected || !valid}
+        disabled={!isConnected || !valid || !!amountError}
       >
         {isConnected ? 'Withdraw' : 'Connect wallet to withdraw'}
       </Button>

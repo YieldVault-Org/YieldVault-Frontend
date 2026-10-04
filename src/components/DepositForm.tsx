@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Button from './Button';
 import AmountInput from './AmountInput';
+import { parseLocaleAmount } from '../utils/localeAmount.js';
 import { useWallet } from '../hooks/useWallet.js';
 import { validateDeposit } from '../utils/validate.js';
 import { previewDeposit } from '../utils/shares.js';
@@ -28,23 +29,31 @@ interface DepositFormProps {
 export default function DepositForm({ vault, onSuccess }: DepositFormProps) {
   const { isConnected, balanceOf } = useWallet();
   const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submissionInFlight = useRef(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const balance = balanceOf(vault.asset);
   const { valid, error } = validateDeposit(amount, balance);
   const sharesOut = previewDeposit(amount as unknown as number, vault.totalAssets, vault.totalShares);
   const touched = amount !== '';
+  const validationMessage = amountError || (touched ? error : null);
 
-  const handleMax = () => setAmount(String(balance));
+  const handleMax = () => {
+    const maximum = parseLocaleAmount(balance);
+    setAmount(maximum.ok ? maximum.canonical : String(balance));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
+    if (!isConnected || !valid || amountError || submissionInFlight.current) return;
+    // A ref closes reentrant submits before React commits the loading state.
+    submissionInFlight.current = true;
     setSubmitting(true);
     setMessage(null);
     try {
-      await vaultService.deposit(vault.id, Number(amount));
+      await vaultService.deposit(vault.id, amount);
       await walletService.signAndSubmit(`Deposit ${amount} ${vault.asset}`);
       setMessage(`Deposited ${amount} ${vault.asset}`);
       setAmount('');
@@ -52,6 +61,7 @@ export default function DepositForm({ vault, onSuccess }: DepositFormProps) {
     } catch (err: unknown) {
       setMessage(err instanceof Error ? err.message : 'Deposit failed');
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -69,6 +79,7 @@ export default function DepositForm({ vault, onSuccess }: DepositFormProps) {
           id="deposit-amount"
           value={amount}
           onChange={setAmount}
+          onValidationError={setAmountError}
           disabled={!isConnected || submitting}
           placeholder="0.00"
           min="0"
@@ -84,10 +95,10 @@ export default function DepositForm({ vault, onSuccess }: DepositFormProps) {
         <span>{formatAmount(sharesOut)} shares</span>
       </div>
 
-      {touched && error && <p className="field-error">{error}</p>}
+      {validationMessage && <p className="field-error">{validationMessage}</p>}
       {message && <p className="form-message">{message}</p>}
 
-      <Button type="submit" loading={submitting} disabled={!isConnected || !valid}>
+      <Button type="submit" loading={submitting} disabled={!isConnected || !valid || !!amountError}>
         {isConnected ? 'Deposit' : 'Connect wallet to deposit'}
       </Button>
     </form>

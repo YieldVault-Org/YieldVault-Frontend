@@ -1,40 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  getLocaleSeparators,
+  parseLocaleAmount,
+  formatLocaleAmount,
+  serializeAmount,
+} from '../utils/localeAmount.js';
 
 interface AmountInputProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Nonnegative canonical decimal minimum, within the supported precision. */
   min?: string;
   step?: string;
   id?: string;
   className?: string;
+  /** BCP-47 locale for display separators. Serialization stays canonical. */
+  locale?: string;
+  maxFractionDigits?: number;
+  /** Optional callback when parse fails (negative, excess precision, etc.). */
+  onValidationError?: (message: string | null) => void;
+}
+
+/** Compare already-normalized decimal strings without binary rounding. */
+function minimumAmountError(canonical: string, min: string, locale: string, maxFractionDigits: number): string | null {
+  // The parser already enforces zero, the common default for existing forms.
+  if (min === '0') return null;
+  const minimum = parseLocaleAmount(min, { locale: 'en-US', maxFractionDigits });
+  if (!minimum.ok) return 'Minimum amount is invalid';
+  const [integer, fraction = ''] = canonical.split('.');
+  const [minInteger, minFraction = ''] = minimum.canonical.split('.');
+  const width = Math.max(fraction.length, minFraction.length);
+  const belowMinimum = integer.length !== minInteger.length
+    ? integer.length < minInteger.length
+    : integer !== minInteger
+      ? integer < minInteger
+      : fraction.padEnd(width, '0') < minFraction.padEnd(width, '0');
+  return belowMinimum
+    ? `Amount must be at least ${formatLocaleAmount(minimum.canonical, { locale, maxFractionDigits })}`
+    : null;
 }
 
 /**
- * Safely parse a string to a number, checking for precision loss.
- * Returns null if the value would lose precision.
- */
-function safeParseNumber(value: string): number | null {
-  if (!value || value.trim() === '') return null;
-  
-  const cleanNum = value.replace(/,/g, '');
-  const num = parseFloat(cleanNum);
-  
-  if (isNaN(num)) return null;
-  
-  // Check if the number is within safe integer range
-  if (Math.abs(num) > Number.MAX_SAFE_INTEGER) {
-    return null;
-  }
-  
-  return num;
-}
-
-/**
- * Amount input component with thousands separators.
- * Formats the display value with commas while maintaining the raw numeric value.
- * Guards against precision loss on large amounts.
+ * Amount input with locale-aware display separators.
+ * The value passed to `onChange` is always the canonical decimal string
+ * (`.` radix, no grouping) so transaction serialization never depends on
+ * the user's locale.
  */
 export default function AmountInput({
   value,
@@ -45,53 +57,94 @@ export default function AmountInput({
   step = 'any',
   id,
   className = '',
+  locale = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US',
+  maxFractionDigits = 7,
+  onValidationError,
 }: AmountInputProps) {
   const [displayValue, setDisplayValue] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const pendingEdit = useRef<{
+    value: string;
+    locale: string;
+    maxFractionDigits: number;
+    min: string;
+  } | null>(null);
 
-  // Format number with thousands separators
-  const formatWithSeparators = (numStr: string): string => {
-    if (!numStr || numStr === '') return '';
-    
-    const num = safeParseNumber(numStr);
-    
-    if (num === null) return numStr;
-    
-    // Format with thousands separators
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 20,
-    });
-  };
-
-  // Update display value when the actual value changes
   useEffect(() => {
-    setDisplayValue(formatWithSeparators(value));
-  }, [value]);
+    const pending = pendingEdit.current;
+    if (
+      pending?.value === value &&
+      pending.locale === locale &&
+      pending.maxFractionDigits === maxFractionDigits &&
+      pending.min === min &&
+      (focused || validationError !== null)
+    ) {
+      // A controlled-parent echo must preserve the localized draft, including
+      // a trailing decimal separator or a rejected edit whose canonical value
+      // was cleared. External value/locale changes still resynchronize below.
+      return;
+    }
+    pendingEdit.current = null;
+    if (!value) {
+      setDisplayValue('');
+      setValidationError(null);
+      return;
+    }
+    try {
+      const canonical = serializeAmount(value, { locale: 'en-US', maxFractionDigits });
+      setDisplayValue(
+        focused
+          ? canonical.replace('.', getLocaleSeparators(locale).decimal)
+          : formatLocaleAmount(canonical, { locale, maxFractionDigits }),
+      );
+      setValidationError(minimumAmountError(canonical, min, locale, maxFractionDigits));
+    } catch (error) {
+      setDisplayValue(value);
+      setValidationError(error instanceof Error ? error.message : 'Amount format is invalid');
+    }
+  }, [value, locale, maxFractionDigits, min, focused, validationError]);
+
+  useEffect(() => {
+    onValidationError?.(validationError);
+  }, [onValidationError, validationError]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
-    
-    // Remove all non-numeric characters except decimal point and minus
-    const cleanValue = inputValue.replace(/[^0-9.-]/g, '');
-    
-    // Allow only one decimal point while preserving all entered digits.
-    const decimalIndex = cleanValue.indexOf('.');
-    const sanitized = decimalIndex === -1
-      ? cleanValue
-      : `${cleanValue.slice(0, decimalIndex + 1)}${cleanValue.slice(decimalIndex + 1).replace(/\./g, '')}`;
-    
-    // Update the actual value (without separators)
-    onChange(sanitized);
+    if (inputValue.trim() === '') {
+      pendingEdit.current = { value: '', locale, maxFractionDigits, min };
+      onChange('');
+      setValidationError(null);
+      setDisplayValue('');
+      return;
+    }
+
+    const parsed = parseLocaleAmount(inputValue, { locale, maxFractionDigits });
+    const error = parsed.ok
+      ? minimumAmountError(parsed.canonical, min, locale, maxFractionDigits)
+      : parsed.error;
+    if (!parsed.ok || error) {
+      // Reject the canonical value too, so callers cannot submit an earlier
+      // valid amount while the field displays a different, invalid draft.
+      pendingEdit.current = { value: '', locale, maxFractionDigits, min };
+      onChange('');
+      setDisplayValue(inputValue);
+      setValidationError(error);
+      return;
+    }
+
+    pendingEdit.current = { value: parsed.canonical, locale, maxFractionDigits, min };
+    setValidationError(null);
+    onChange(parsed.canonical);
+    setDisplayValue(focused ? inputValue : formatLocaleAmount(parsed.canonical, { locale, maxFractionDigits }));
   };
 
   const handleBlur = () => {
-    // Re-apply formatting on blur to ensure consistent display
-    setDisplayValue(formatWithSeparators(value));
+    setFocused(false);
   };
 
   const handleFocus = () => {
-    // On focus, show the raw value without separators for easier editing
-    setDisplayValue(value);
+    setFocused(true);
   };
 
   return (
@@ -108,6 +161,7 @@ export default function AmountInput({
       disabled={disabled}
       className={className}
       inputMode="decimal"
+      aria-invalid={validationError ? true : undefined}
     />
   );
 }
