@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Button from './Button';
 import AmountInput from './AmountInput';
+import TxStatus from './TxStatus';
 import { useWallet } from '../hooks/useWallet.js';
 import { usePositions } from '../hooks/usePositions.js';
+import { useTxLifecycle } from '../hooks/useTxLifecycle.js';
 import { validateWithdraw } from '../utils/validate.js';
 import { previewWithdraw } from '../utils/shares.js';
 import { formatAmount } from '../utils/format.js';
@@ -11,7 +13,7 @@ import * as walletService from '../services/wallet.js';
 
 /**
  * Withdraw form for a vault. Validates against the user's deposited amount,
- * previews the shares to be burned, and submits a mock transaction.
+ * previews the shares to be burned, and submits through a refresh-safe tx lifecycle.
  */
 
 interface WithdrawFormVault {
@@ -27,11 +29,36 @@ interface WithdrawFormProps {
 }
 
 export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
-  const { isConnected } = useWallet();
+  const { isConnected, address, walletNetwork } = useWallet();
   const { positions } = usePositions();
   const [amount, setAmount] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const announcedOpRef = useRef<string | null>(null);
+  const { operation, status, busy, checking, run, checkStatus, reset } = useTxLifecycle({
+    kind: 'withdraw',
+    vaultId: vault.id,
+    walletAddress: address ?? '',
+    network: walletNetwork ?? '',
+    getStatus: walletService.getTransactionStatus,
+  });
+
+  useEffect(() => {
+    if (operation?.amount && amount === '') {
+      setAmount(String(operation.amount));
+    }
+  }, [operation?.amount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A restored operation can confirm after a refresh, outside submitWithdraw.
+  // Refresh dependent positions once per observed receipt, including restores.
+  useEffect(() => {
+    if (operation?.state !== 'confirmed' || announcedOpRef.current === operation.clientOpId) return;
+    announcedOpRef.current = operation.clientOpId;
+    setMessage(operation.statusSource !== 'chain'
+      ? `Demo withdrawal simulated: ${operation.amount} ${vault.asset}; no on-chain confirmation.`
+      : `Withdrew ${operation.amount} ${vault.asset}`);
+    setAmount('');
+    onSuccess?.();
+  }, [operation, onSuccess, vault.asset]);
 
   const position = positions.find((p: { vaultId: string }) => p.vaultId === vault.id);
   const deposited = position?.value ?? 0;
@@ -45,22 +72,22 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
 
   const handleMax = () => setAmount(String(deposited));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!valid) return;
-    setSubmitting(true);
+  const submitWithdraw = async (value: string) => {
     setMessage(null);
     try {
-      await vaultService.withdraw(vault.id, Number(amount));
-      await walletService.signAndSubmit(`Withdraw ${amount} ${vault.asset}`);
-      setMessage(`Withdrew ${amount} ${vault.asset}`);
-      setAmount('');
-      onSuccess?.();
-    } catch (err: unknown) {
+      await run(value, async (clientOpId) => {
+        await vaultService.withdraw(vault.id, Number(value));
+        return walletService.signAndSubmit(`Withdraw ${value} ${vault.asset}`, { clientOpId });
+      });
+     } catch (err: unknown) {
       setMessage(err instanceof Error ? err.message : 'Withdraw failed');
-    } finally {
-      setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid || busy || operation?.state === 'failed') return;
+    await submitWithdraw(amount);
   };
 
   return (
@@ -76,12 +103,12 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
           id="withdraw-amount"
           value={amount}
           onChange={setAmount}
-          disabled={!isConnected || submitting}
+          disabled={!isConnected || busy}
           placeholder="0.00"
           min="0"
           step="any"
         />
-        <button type="button" className="max-btn" onClick={handleMax}>
+        <button type="button" className="max-btn" onClick={handleMax} disabled={busy}>
           MAX
         </button>
       </div>
@@ -92,13 +119,34 @@ export default function WithdrawForm({ vault, onSuccess }: WithdrawFormProps) {
       </div>
 
       {touched && error && <p className="field-error">{error}</p>}
-      {message && <p className="form-message">{message}</p>}
+      {message && (
+        <p className="form-message">{message}</p>
+      )}
+
+      <TxStatus
+        label={status.label}
+        detail={status.detail}
+        canRetry={status.canRetry}
+        canCheckStatus={status.canCheckStatus}
+        checking={checking}
+        needsNewSignature={status.needsNewSignature}
+        state={operation?.state}
+        onRetry={
+          status.canRetry && isConnected && valid
+            ? () => {
+                void submitWithdraw(amount);
+              }
+            : undefined
+        }
+        onCheckStatus={status.canCheckStatus ? () => { void checkStatus(); } : undefined}
+        onDismiss={status.canDismiss ? reset : undefined}
+      />
 
       <Button
         type="submit"
         variant="secondary"
-        loading={submitting}
-        disabled={!isConnected || !valid}
+        loading={checking || operation?.state === 'submitted' || operation?.state === 'confirming'}
+        disabled={!isConnected || !valid || busy || operation?.state === 'failed'}
       >
         {isConnected ? 'Withdraw' : 'Connect wallet to withdraw'}
       </Button>
