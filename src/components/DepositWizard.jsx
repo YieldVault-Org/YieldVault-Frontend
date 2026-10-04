@@ -7,7 +7,8 @@ import { previewDeposit } from '../utils/shares.js';
 import { formatAmount, formatDate } from '../utils/format.js';
 import * as vaultService from '../services/vault.js';
 import * as walletService from '../services/wallet.js';
-import { useAppContext } from '../context/AppContext';
+import { runPreflight } from '../services/preflight.js';
+import { usePreflightGuard } from '../hooks/usePreflight.js';
 
 /**
  * Multi-step deposit wizard for a vault. Guides the user through
@@ -17,13 +18,23 @@ import { useAppContext } from '../context/AppContext';
  * @param {() => void} [props.onSuccess]
  */
 export default function DepositWizard({ vault, onSuccess }) {
-  const { isConnected, balanceOf } = useWallet();
-  const { slippageTolerance } = useAppContext();
-  const { timezone } = useAppContext();
+  const { isConnected, balanceOf, address, walletNetwork } = useWallet();
+  const { network, slippageTolerance, timezone } = useAppContext();
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState(null);
 
   const balance = balanceOf(vault.asset);
+  const { capture: capturePreflight } = usePreflightGuard({
+    kind: 'deposit',
+    vaultId: vault.id,
+    asset: vault.asset,
+    walletAddress: address,
+    isConnected,
+    network: walletNetwork ?? network,
+    expectedNetwork: network,
+    balance,
+    vault,
+  });
 
   const validate = (_stepIndex, data) => {
     const errors = {};
@@ -62,8 +73,20 @@ export default function DepositWizard({ vault, onSuccess }) {
 
   const handleComplete = async (data) => {
     setSubmitting(true);
+    const attempt = capturePreflight(data.amount);
     try {
+      const preflight = await runPreflight(attempt.input);
+      if (!attempt.canSign(preflight, preflight.network)) {
+        setReceipt({ error: preflight.reason || 'Preflight expired. Review and retry before signing.' });
+        return;
+      }
+
       const result = await vaultService.deposit(vault.id, Number(data.amount));
+      const signingNetwork = await walletService.getNetwork();
+      if (!attempt.canSign(preflight, signingNetwork)) {
+        setReceipt({ error: 'Preflight expired. Review and retry before signing.' });
+        return;
+      }
       await walletService.signAndSubmit(`Deposit ${data.amount} ${vault.asset}`);
       // Set receipt first so the success UI renders before the parent
       // re-renders. Use a microtask delay to ensure the state update flushes.
