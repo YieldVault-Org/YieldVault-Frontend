@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -11,24 +11,56 @@ import Positions from './pages/Positions';
 import NotFound from './pages/NotFound';
 
 /**
+ * Wrap a page in a route-level boundary so a failed page remounts independently
+ * while the shell (banner / navbar / footer) stays interactive.
+ * @param {string} feature
+ * @param {import('react').ReactNode} element
+ * @param {string} pathname
+ */
+function withRouteBoundary(feature, element, pathname) {
+  return (
+    <ErrorBoundary level="route" feature={feature} resetKeys={[pathname]}>
+      {element}
+    </ErrorBoundary>
+  );
+}
+
+/**
  * Root layout: persistent navbar/footer with routed page content.
+ * Route boundaries isolate page failures; feature boundaries inside pages
+ * keep sibling widgets alive when one section crashes.
  */
 export default function App() {
+  const { pathname } = useLocation();
+
   return (
     <div className="app">
       <RouteAnnouncer />
       <EnvironmentBanner />
       <Navbar />
       <main className="app-main">
-        <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/vault/:id" element={<VaultDetail />} />
-            <Route path="/positions" element={<Positions />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </ErrorBoundary>
+        <Routes>
+          <Route
+            path="/"
+            element={withRouteBoundary('home', <Home />, pathname)}
+          />
+          <Route
+            path="/dashboard"
+            element={withRouteBoundary('dashboard', <Dashboard />, pathname)}
+          />
+          <Route
+            path="/vault/:id"
+            element={withRouteBoundary('vault-detail', <VaultDetail />, pathname)}
+          />
+          <Route
+            path="/positions"
+            element={withRouteBoundary('positions', <Positions />, pathname)}
+          />
+          <Route
+            path="*"
+            element={withRouteBoundary('not-found', <NotFound />, pathname)}
+          />
+        </Routes>
       </main>
       <Footer />
     </div>
