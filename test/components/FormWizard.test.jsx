@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import axe from 'axe-core';
 import FormWizard from '../../src/components/FormWizard.jsx';
 
 /** A simple step factory so tests stay DRY. */
@@ -16,11 +17,16 @@ function createSteps(count = 3) {
           <input
             data-testid={`input-${i + 1}`}
             type="text"
+            aria-label={`Field ${i + 1}`}
+            aria-invalid={errors[`field${i + 1}`] ? 'true' : 'false'}
+            aria-describedby={errors[`field${i + 1}`] ? `error-${i + 1}` : undefined}
             value={data[`field${i + 1}`] || ''}
             onChange={(e) => setData({ [`field${i + 1}`]: e.target.value })}
           />
           {errors[`field${i + 1}`] && (
-            <span data-testid={`error-${i + 1}`}>{errors[`field${i + 1}`]}</span>
+            <span id={`error-${i + 1}`} data-testid={`error-${i + 1}`} role="alert">
+              {errors[`field${i + 1}`]}
+            </span>
           )}
         </div>
       );
@@ -49,24 +55,24 @@ describe('FormWizard', () => {
 
   it('advances to the next step on Next click', () => {
     render(<FormWizard steps={createSteps()} />);
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     expect(screen.getByText('Content for step 2')).toBeInTheDocument();
     expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
   });
 
   it('goes back on Back click', () => {
     render(<FormWizard steps={createSteps()} />);
-    fireEvent.click(screen.getByText('Next'));
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 3/i }));
     expect(screen.getByText('Content for step 3')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Back'));
+    fireEvent.click(screen.getByRole('button', { name: /Go to previous step/i }));
     expect(screen.getByText('Content for step 2')).toBeInTheDocument();
   });
 
   it('hides Back on the first step', () => {
     render(<FormWizard steps={createSteps()} />);
-    expect(screen.queryByText('Back')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Go to previous step/i })).not.toBeInTheDocument();
   });
 
   it('shows Complete on the last step and calls onComplete', () => {
@@ -74,8 +80,8 @@ describe('FormWizard', () => {
     render(<FormWizard steps={createSteps()} onComplete={onComplete} />);
 
     // Go to step 3
-    fireEvent.click(screen.getByText('Next'));
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 3/i }));
 
     expect(screen.getByText('Complete')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Complete'));
@@ -87,9 +93,9 @@ describe('FormWizard', () => {
     render(<FormWizard steps={createSteps()} onComplete={onComplete} />);
 
     fireEvent.change(screen.getByTestId('input-1'), { target: { value: 'hello' } });
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     fireEvent.change(screen.getByTestId('input-2'), { target: { value: 'world' } });
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 3/i }));
     fireEvent.click(screen.getByText('Complete'));
 
     expect(onComplete).toHaveBeenCalledWith({ field1: 'hello', field2: 'world' });
@@ -103,17 +109,101 @@ describe('FormWizard', () => {
         completingLabel="Submitting…"
       />,
     );
-    fireEvent.click(screen.getByText('Next'));
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 3/i }));
     expect(screen.getByText('Submit Form')).toBeInTheDocument();
   });
 
   it('disables Next button while submitting', () => {
     render(<FormWizard steps={createSteps()} submitting />);
-    expect(screen.getByText('Next')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Continue to step 2/i })).toBeDisabled();
     // Back is hidden on the first step — verify it's not rendered
-    expect(screen.queryByText('Back')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Go to previous step/i })).not.toBeInTheDocument();
   });
+
+  it('does not advance with Enter while submitting, and resumes when idle', () => {
+    const steps = createSteps();
+    const { rerender } = render(<FormWizard steps={steps} submitting />);
+    fireEvent.keyDown(screen.getByRole('heading', { name: 'Step 1' }), { key: 'Enter' });
+    expect(screen.getByText('Content for step 1')).toBeInTheDocument();
+
+    rerender(<FormWizard steps={steps} submitting={false} />);
+    fireEvent.keyDown(screen.getByRole('heading', { name: 'Step 1' }), { key: 'Enter' });
+    expect(screen.getByText('Content for step 2')).toBeInTheDocument();
+  });
+
+  it('does not repeat completion from the heading while submitting', () => {
+    const steps = createSteps(1);
+    const onComplete = vi.fn();
+    const { rerender } = render(<FormWizard steps={steps} onComplete={onComplete} />);
+    fireEvent.keyDown(screen.getByRole('heading', { name: 'Step 1' }), { key: 'Enter' });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    rerender(<FormWizard steps={steps} onComplete={onComplete} submitting />);
+    fireEvent.keyDown(screen.getByRole('heading', { name: 'Step 1' }), { key: 'Enter' });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['next', 'back'])('blocks the exposed %s callback while submitting', (direction) => {
+    const steps = createSteps().map((step) => ({
+      ...step,
+      content: ({ goNext, goBack }) => (
+        <>
+          <button type="button" onClick={goNext}>Custom next</button>
+          <button type="button" onClick={goBack}>Custom back</button>
+        </>
+      ),
+    }));
+    const { rerender } = render(<FormWizard steps={steps} />);
+    if (direction === 'back') fireEvent.click(screen.getByText('Custom next'));
+    const startingStep = direction === 'next' ? 'Step 1' : 'Step 2';
+    rerender(<FormWizard steps={steps} submitting />);
+    fireEvent.click(screen.getByText(`Custom ${direction}`));
+    expect(screen.getByRole('heading', { name: startingStep })).toBeInTheDocument();
+
+    rerender(<FormWizard steps={steps} submitting={false} />);
+    fireEvent.click(screen.getByText(`Custom ${direction}`));
+    expect(screen.getByRole('heading', {
+      name: direction === 'next' ? 'Step 2' : 'Step 1',
+    })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['auto-repeat', { repeat: true }],
+    ['composition', { isComposing: true }],
+    ['Control', { ctrlKey: true }],
+    ['Alt', { altKey: true }],
+    ['Meta', { metaKey: true }],
+  ])('does not consume %s Enter as wizard navigation', (_name, modifiers) => {
+    render(<FormWizard steps={createSteps()} />);
+    const allowed = fireEvent.keyDown(screen.getByRole('heading', { name: 'Step 1' }), {
+      key: 'Enter', ...modifiers,
+    });
+    expect(screen.getByText('Content for step 1')).toBeInTheDocument();
+    expect(allowed).toBe(true);
+  });
+
+  it.each(['link', 'editor', 'handled widget'])(
+    'preserves Enter handling in a nested %s',
+    (kind) => {
+      const steps = createSteps();
+      steps[0].content = () => {
+        if (kind === 'link') return <a data-testid="control" href="#help">Help</a>;
+        if (kind === 'editor') return (
+          <div contentEditable suppressContentEditableWarning data-testid="control">Draft</div>
+        );
+        return (
+          <div role="button" tabIndex={0} data-testid="control" onKeyDown={(e) => e.preventDefault()}>
+            Custom action
+          </div>
+        );
+      };
+      render(<FormWizard steps={steps} />);
+      const allowed = fireEvent.keyDown(screen.getByTestId('control'), { key: 'Enter' });
+      expect(screen.getByRole('heading', { name: 'Step 1' })).toBeInTheDocument();
+      if (kind !== 'handled widget') expect(allowed).toBe(true);
+    },
+  );
 
   it('validates the current step and prevents advancement on errors', () => {
     const validate = (stepIndex, data) => {
@@ -125,31 +215,31 @@ describe('FormWizard', () => {
 
     render(<FormWizard steps={createSteps()} validate={validate} />);
     // Try to advance without filling enough data
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     expect(screen.getByText('Too short')).toBeInTheDocument();
     expect(screen.getByText('Content for step 1')).toBeInTheDocument();
 
     // Fill data and advance
     fireEvent.change(screen.getByTestId('input-1'), { target: { value: 'ok' } });
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     expect(screen.getByText('Content for step 2')).toBeInTheDocument();
   });
 
   it('clears errors only after advancing to the next step', () => {
     let errorsPresent = true;
-    const validate = () => errorsPresent ? { field1: 'Error' } : null;
+    const validate = () => (errorsPresent ? { field1: 'Error' } : null);
 
     render(<FormWizard steps={createSteps()} validate={validate} />);
 
     // Trigger validation by clicking Next
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     expect(screen.getByText('Error')).toBeInTheDocument();
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
 
     // Now make validate pass and click Next again
     fireEvent.change(screen.getByTestId('input-1'), { target: { value: 'valid' } });
     errorsPresent = false;
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
 
     // Should have advanced to step 2 and errors should be gone
     expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
@@ -163,7 +253,7 @@ describe('FormWizard', () => {
     const fill = document.querySelector('.wizard-progress-fill');
     expect(fill.style.width).toBe('0%');
 
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     // Step 2 of 4 -> 33.333…%
     const width = parseFloat(fill.style.width);
     expect(width).toBeCloseTo(33.33, 0);
@@ -183,7 +273,7 @@ describe('FormWizard', () => {
     );
     expect(screen.getByText('Only step')).toBeInTheDocument();
     expect(screen.getByText('Finish')).toBeInTheDocument();
-    expect(screen.queryByText('Back')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Go to previous step/i })).not.toBeInTheDocument();
   });
 
   it('does not advance when Enter is pressed inside an input', () => {
@@ -212,7 +302,7 @@ describe('FormWizard', () => {
       />,
     );
     // Advance to the last step first
-    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
     expect(screen.getByText('Complete')).toBeInTheDocument();
 
     // Re-render with submitting=true (preserves internal state via rerender)
@@ -227,5 +317,109 @@ describe('FormWizard', () => {
     );
     // The Complete button should now show "Working…"
     expect(screen.getByText('Working…')).toBeInTheDocument();
+  });
+
+  describe('accessibility', () => {
+    it('passes axe checks in initial, invalid, and submitting states', async () => {
+      const steps = createSteps(2);
+      const validate = (_step, data) => data.field1 ? {} : { field1: 'Amount is required' };
+      const { container, rerender } = render(<FormWizard steps={steps} validate={validate} />);
+      const checkAccessibility = async () => {
+        const results = await axe.run(container, {
+          runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+          // JSDOM has no layout/color computation. Contrast and screen-reader
+          // behavior still require the documented checks in a real browser.
+          rules: { 'color-contrast': { enabled: false } },
+        });
+        expect(results.violations).toEqual([]);
+        expect(results.incomplete).toEqual([]);
+      };
+
+      await checkAccessibility();
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+      expect(screen.getByRole('alert')).toHaveTextContent('Amount is required');
+      await checkAccessibility();
+
+      fireEvent.change(screen.getByTestId('input-1'), { target: { value: '10' } });
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+      rerender(<FormWizard steps={steps} validate={validate} submitting />);
+      await checkAccessibility();
+    });
+
+    it('exposes a polite live region that announces step changes', async () => {
+      render(<FormWizard steps={createSteps()} />);
+      const live = screen.getByTestId('wizard-live-region');
+      expect(live).toHaveAttribute('aria-live', 'polite');
+      expect(live).toHaveAttribute('role', 'status');
+      expect(live).toHaveTextContent(/Step 1 of 3/i);
+
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+      await waitFor(() => {
+        expect(live).toHaveTextContent(/Step 2 of 3/i);
+      });
+    });
+
+    it('marks the active step with aria-current and uses a progress list', () => {
+      render(<FormWizard steps={createSteps()} />);
+      const list = screen.getByRole('list', { name: 'Form steps' });
+      expect(list.tagName).toBe('OL');
+      const current = list.querySelector('[aria-current="step"]');
+      expect(current).toBeTruthy();
+      expect(current).toHaveTextContent('Step 1');
+    });
+
+    it('labels the progressbar for assistive tech', () => {
+      render(<FormWizard steps={createSteps()} />);
+      const bar = screen.getByRole('progressbar', { name: 'Wizard progress' });
+      expect(bar).toHaveAttribute('aria-valuemin', '0');
+      expect(bar).toHaveAttribute('aria-valuemax', '100');
+    });
+
+    it('moves focus to the step heading when advancing', async () => {
+      render(<FormWizard steps={createSteps()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+      await waitFor(() => {
+        const heading = screen.getByRole('heading', { name: 'Step 2', level: 3 });
+        expect(heading).toHaveFocus();
+      });
+    });
+
+    it('announces validation failures in the live region (regression)', async () => {
+      const validate = () => ({ field1: 'Amount is required' });
+      render(<FormWizard steps={createSteps()} validate={validate} />);
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 2/i }));
+      const live = screen.getByTestId('wizard-live-region');
+      await waitFor(() => {
+        expect(live).toHaveTextContent(/Validation error: Amount is required/i);
+      });
+      // Stay on step 1 — original failure mode: errors must surface, not silent-block.
+      // Focus follows the validation result back to the first invalid control instead
+      // of leaving keyboard users stranded on the navigation button.
+      expect(screen.getByText('Content for step 1')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Amount is required');
+      await waitFor(() => {
+        expect(screen.getByTestId('input-1')).toHaveFocus();
+      });
+    });
+
+    it('sets aria-busy while submitting', () => {
+      render(<FormWizard steps={createSteps()} submitting />);
+      expect(document.querySelector('.form-wizard')).toHaveAttribute('aria-busy', 'true');
+    });
+
+    it('keeps the full flow operable with keyboard-activated Next/Back/Complete', () => {
+      const onComplete = vi.fn();
+      render(<FormWizard steps={createSteps()} onComplete={onComplete} />);
+
+      const next = screen.getByRole('button', { name: /Continue to step 2/i });
+      next.focus();
+      fireEvent.keyDown(next, { key: 'Enter' });
+      fireEvent.click(next); // activation after focus
+      expect(screen.getByText('Content for step 2')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Continue to step 3/i }));
+      fireEvent.click(screen.getByText('Complete'));
+      expect(onComplete).toHaveBeenCalledOnce();
+    });
   });
 });
